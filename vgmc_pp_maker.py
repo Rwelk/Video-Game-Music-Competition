@@ -7,9 +7,9 @@ ROOT = Path(__file__).parent.absolute()
 
 # Parse the arguments provided to argparse.
 parser = argparse.ArgumentParser(description="Use this file to create a PowerPoint for the Florida Southern College Computer Science Club's Video Game Music Competiton (FSCCSCVGMC).")
-parser.add_argument('-d', '--default', action="store_true", help='creates a default PowerPoint with 5 Rounds wach with 10 Tracks.')
-parser.add_argument('-r', '--rounds', type=int, nargs='?', help='Provide a number of rounds.')
-parser.add_argument('-t', '--tracks', type=int, nargs='?', help='Provide a number of tracks for each round.')
+parser.add_argument('-d', '--default', action="store_true", help='creates a default PowerPoint with 5 Rounds each with 10 Tracks.')
+parser.add_argument('-r', '--rounds', type=int, nargs='?', help='provide a number of rounds')
+parser.add_argument('-t', '--tracks', type=int, nargs='?', help='provide a number of tracks for each round')
 args = parser.parse_args()
 
 def main():

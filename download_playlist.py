@@ -1,4 +1,4 @@
-# download_youtube_queue.py
+# download_playlist.py
 
 import youtube_dl
 import argparse
@@ -7,7 +7,7 @@ ROOT = Path(__file__).parent.absolute()
 
 
 # argparse code for passing in the playlist to download with -p or --playlist
-parser = argparse.ArgumentParser(description="Use this file to download and convert the videos in a Youtube playlist to .mp3 files.")
+parser = argparse.ArgumentParser(description='Use this file to download and convert the videos in a Youtube playlist to .mp3 files.')
 parser.add_argument('-p', '--playlist', required=True, help='the link to the Youtube playlist that will be downloaded')
 args = parser.parse_args()
 
@@ -29,6 +29,8 @@ class MyLogger(object):
 
 # Main method that drives the code
 def main():
+
+    # ydl is the YoutubeDL object that is used to fetch data from Youtube.
     ydl = youtube_dl.YoutubeDL(
     {
         'format': 'bestaudio/best',
@@ -41,26 +43,37 @@ def main():
         'outtmpl': str(ROOT / '%(title)s.%(ext)s'),
     })
 
+    # botched_vids[] is an array that will store any songs that encounter a problem while downloading.
     botched_vids = []
-    with ydl:
-        result = ydl.extract_info(args.playlist, download=False)
 
-        for video in result['entries']:
+    with ydl:
+
+        # videos is an array that holds all the videos in the Youtube Playlist
+        videos = ydl.extract_info(args.playlist, download=False)['entries']
+
+        # For every video, try to download it via the webpage_url value stored in video
+        for video in videos:
             try:
                 ydl.download([video['webpage_url']])
+
+            # In case the user tries to use CTRL-C to close out the program, this try-catch would prevent
+            #     it from triggering, so this special except clause is added.
             except KeyboardInterrupt:
-                print("You triggered a KeyBoardInterrupt exception.")
-                print("Shutting down download_yputube_queue.py")
+                print('\033[91mYou triggered a KeyBoardInterrupt exception.\033[0m')
+                print('\033[91mShutting down download_playlist.py\033[0m')
                 return
+
+            # If something goes wrong, print the following message and append the video to botched_vids[]
+            #     for review later.
             except:
-                print('Something went wrong with this song, skipping for now...')
+                print('\033[93m  Skipping this song since something went wrong...\033[0m')
                 botched_vids.append(video['title'])
 
+    # If there were any videos that couldn't be downloaded, this is where they're be displayed.
     if botched_vids:
         print("The following songs couldn't be downloaded:")
-
         for title in botched_vids:
-            print(f' {title}')
+            print(f'  {title}')
 
 
 # Method for showing progess of download/conversion
@@ -69,12 +82,12 @@ def my_hook(d):
 
     if not FLAG and d['status'] == 'downloading':
         FLAG = not FLAG
-        print(f"\nDownloading {d['filename'].split(chr(92))[-1].split('.')[0]}...")
+        print(f"\n\033[92m  Downloading {d['filename'].split(chr(92))[-1].split('.')[0]}...\033[0m")
     if d['status'] == 'finished':
         FLAG = False
-        print('Now converting to MP3...')
+        print('  Converting to .mp3...')
 
 
 if __name__ == '__main__':
-    print('\nRunning download_youtube_queue.py')
+    print('\nRunning download_playlist.py')
     main()

@@ -1,7 +1,7 @@
 # vgmc_pp_maker.py
 
 from pptx import Presentation
-from pptx.util import Inches
+from pptx.util import Inches, Pt
 
 import argparse
 import sys
@@ -25,16 +25,16 @@ def main():
 
 	# Create the PowerPoint.
 	prs = Presentation()
-	prs.slide_width = Inches(16)
-	prs.slide_height = Inches(9)
+	prs.slide_width = Inches(13.333)
+	prs.slide_height = Inches(7.5)
 
 	# Create the different Slide Layouts
 	title_slide = prs.slide_layouts[0]
 	title_content_slide = prs.slide_layouts[1]
 	section_header_slide = prs.slide_layouts[2]
 
-
-	prs = title_and_rules(prs, title_slide, title_content_slide, rounds, tracks)
+	# Create the Title and Rules Slides
+	title_and_rules(prs, title_slide, title_content_slide, rounds, tracks)
 
 
 
@@ -76,43 +76,58 @@ def title_and_rules(prs, title_slide_layout, rules_slide_layout, rounds, tracks)
 
 	# Populate the slide's Title and Subtitle.
 	set_title(slide1, "Video Game Music Guessing Competition")
-	set_text(slide1, "Sponsored by the Computer Science Club")
+	add_text(slide1, "Sponsored by the Computer Science Club", size=18)
 
 	# Create the Rules Slide.
 	slide2 = prs.slides.add_slide(rules_slide_layout)
 
 	# Populate the slide's Title and Content.
 	set_title(slide2, "Rules and Scoring")
-	set_text(slide2, f"There will be {rounds} Rounds of {tracks} Tracks")
+	add_text(slide2, f"There will be {rounds} Rounds of {tracks} Tracks", size=20)
 	
-	add_text(slide2, "You will get roughly 30 – 45 seconds of music to guess from.")
-	add_text(slide2, "Scoring is as follows:")
-	add_text(slide2, "1 point for Game Franchise", 1)
-	add_text(slide2, "1 point for Specific Game", 1)
-	add_text(slide2, "1 point for Track Name/Place", 1)
-	add_text(slide2, "A couple songs don’t have official releases, or play in multiple places. Those have a star listed on the answer key, and if you put something close to it you’ll still receive the point.")
-
-	return prs
+	add_text(slide2, "You will get roughly 30 – 45 seconds of music to guess from.", size=20)
+	add_text(slide2, "Scoring is as follows:", size=20)
+	add_text(slide2, "1 point for Game Franchise", level=1)
+	add_text(slide2, "1 point for Specific Game", level=1, italic=True)
+	add_text(slide2, "1 point for Track Name/Place", level=1, bold=True)
+	add_text(slide2, "A couple songs don’t have official releases, or play in multiple places. Those have a star listed on the answer key, and if you put something close to it you’ll still receive the point.", size=20)
 
 
 # This method is for more easily setting the title of a slide.
-def set_title(slide, text):
-	slide.shapes.title.text = text
-
-
-# This method is for more easily setting the first line of text in a slide.
-def set_text(slide, text):
-	slide.placeholders[1].text = text
+def set_title(slide, text, size=54):
+	t = slide.shapes.title.text_frame.paragraphs[0]
+	
+	t.font.size = Pt(size)
+	t.text = text
 
 
 # This method is for adding additional lines of text to a slide
-def add_text(slide, text, level=0):
+def add_text(slide, text, level=0, size=18, bold=False, italic=False):
 
-	p = slide.shapes.placeholders[1].text_frame.add_paragraph()
+	# Each slide has some number of items on them called shapes, which themselves store some number of
+	#     placeholders.
+	# These placeholders are stored in a dictionary simply called placeholders{}.
+	# To add text to a slide, we have to access the placeholder stored at key 1.
+	# Note that since placeholders is not an array, this is not accessing INDEX 1 but KEY 1.
+	# From there, we can acess the text_frame, which is what stores the text in the shape.
+	content_area = slide.shapes.placeholders[1].text_frame
+
+	# text_frames are composed of various Paragraphs.
+	# p will be the Paragraph that our text argument will be written into.
+	# However, before we can write we have to determine whether the text_frame already has content.
+	# If it does, we have to call .add_paragraph(), a method belonging to text_frame that creates a new
+	#     Paragraph that can be written to.
+	# Otherwise, we should write to the Paragraph already there.
+	p = content_area.add_paragraph() if content_area.text else content_area.paragraphs[0]
+
+	# Apply text styling.
+	p.level = level
+	p.font.size = Pt(size)
+	p.font.bold = bold
+	p.font.italic = italic
+
+	# Write the text into the space.
 	p.text = text
-
-	if level: p.level = level
-
 
 
 # This method is for saving the PowerPoint produced by this script.

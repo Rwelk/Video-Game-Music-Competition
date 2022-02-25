@@ -143,5 +143,10 @@ def save_presentation(presentation):
 
 
 if __name__ == '__main__':
-	print('Running vgmc_pp_maker.py')
-	main()
+	print('\n\033[92mRunning vgmc_pp_maker.py\n\033[0m')
+
+	try:
+		main()
+
+	except Exception as e:
+		print(f'\033[91m{e}\033[0m')

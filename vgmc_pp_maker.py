@@ -2,8 +2,15 @@
 
 from pptx import Presentation
 from pptx.util import Inches, Pt
+from pptx.enum.text import MSO_VERTICAL_ANCHOR
+from math import ceil
+
+
+import copy
+from pptx.shapes.autoshape import Shape
 
 import argparse
+from io import FileIO
 import sys
 from pathlib import Path
 ROOT = Path(__file__).parent.absolute()
@@ -20,23 +27,23 @@ args = parser.parse_args()
 def main():
 	
 	# Determine how many Rounds and Tracks per Round there will be.
-	rounds, tracks = determine_parameters()
-	print(f"There will be {rounds} Rounds Each with {tracks} Tracks.")
+	num_rounds, num_tracks = determine_parameters()
+	print(f"\033[96mThere will be \033[93m{num_rounds}\033[96m Rounds Each with \033[93m{num_tracks}\033[96m Tracks.\033[0m")
 
-	# Create the PowerPoint.
-	prs = Presentation()
-	prs.slide_width = Inches(13.333)
-	prs.slide_height = Inches(7.5)
-
-	# Create the different Slide Layouts
-	title_slide = prs.slide_layouts[0]
-	title_content_slide = prs.slide_layouts[1]
-	section_header_slide = prs.slide_layouts[2]
+	# Create the PowerPoint using the slide template.
+	prs = Presentation(ROOT / "template.pptx")
 
 	# Create the Title and Rules Slides
-	title_and_rules(prs, title_slide, title_content_slide, rounds, tracks)
+	rules_slide(prs, num_rounds, num_tracks)
 
+	for round_num in range(1, num_rounds + 1):
 
+		round_slide(prs, round_num)
+
+		for track_num in range(1, num_tracks + 1):
+			track_slide(prs, round_num, track_num)
+
+		review_slide(prs, round_num, num_tracks)
 
 
 
@@ -48,7 +55,7 @@ def main():
 def determine_parameters():
 
 	# default is supposed to be mutually exclusive with rounds and tracks, so if -d is provided, it cannot
-	#     be combined with -r or -t.
+	#	 be combined with -r or -t.
 	# One the other end, -r and -t can be used together or separatly, but cannot be used with -d.
 	if args.default and (args.rounds or args.tracks):
 		print("--default and --rounds|--tracks are mutually exclusive and cannot be used together.")
@@ -68,44 +75,23 @@ def determine_parameters():
 	return rounds, tracks
 
 
-# This method creates the Title and Rules Slides.
-def title_and_rules(prs, title_slide_layout, rules_slide_layout, rounds, tracks):
-
-	# Create the Title Slide.
-	slide1 = prs.slides.add_slide(title_slide_layout)
-
-	# Populate the slide's Title and Subtitle.
-	set_title(slide1, "Video Game Music Guessing Competition")
-	add_text(slide1, "Sponsored by the Computer Science Club", size=18)
-
-	# Create the Rules Slide.
-	slide2 = prs.slides.add_slide(rules_slide_layout)
-
-	# Populate the slide's Title and Content.
-	set_title(slide2, "Rules and Scoring")
-	add_text(slide2, f"There will be {rounds} Rounds of {tracks} Tracks", size=20)
+# This method is for generating a new slide.
+def add_slide(prs, layout, title):
 	
-	add_text(slide2, "You will get roughly 30 – 45 seconds of music to guess from.", size=20)
-	add_text(slide2, "Scoring is as follows:", size=20)
-	add_text(slide2, "1 point for Game Franchise", level=1)
-	add_text(slide2, "1 point for Specific Game", level=1, italic=True)
-	add_text(slide2, "1 point for Track Name/Place", level=1, bold=True)
-	add_text(slide2, "A couple songs don’t have official releases, or play in multiple places. Those have a star listed on the answer key, and if you put something close to it you’ll still receive the point.", size=20)
-
-
-# This method is for more easily setting the title of a slide.
-def set_title(slide, text, size=54):
-	t = slide.shapes.title.text_frame.paragraphs[0]
+	# Create the slide based off of the passed in layout.
+	slide = prs.slides.add_slide(layout)
 	
-	t.font.size = Pt(size)
-	t.text = text
+	# Title the slide.
+	slide.shapes.title.text_frame.paragraphs[0].text = title
+
+	return slide
 
 
 # This method is for adding additional lines of text to a slide
-def add_text(slide, text, level=0, size=18, bold=False, italic=False):
+def add_text(slide, text, level=0, bold=False, italic=False):
 
 	# Each slide has some number of items on them called shapes, which themselves store some number of
-	#     placeholders.
+	#	 placeholders.
 	# These placeholders are stored in a dictionary simply called placeholders{}.
 	# To add text to a slide, we have to access the placeholder stored at key 1.
 	# Note that since placeholders is not an array, this is not accessing INDEX 1 but KEY 1.
@@ -116,18 +102,143 @@ def add_text(slide, text, level=0, size=18, bold=False, italic=False):
 	# p will be the Paragraph that our text argument will be written into.
 	# However, before we can write we have to determine whether the text_frame already has content.
 	# If it does, we have to call .add_paragraph(), a method belonging to text_frame that creates a new
-	#     Paragraph that can be written to.
+	#	 Paragraph that can be written to.
 	# Otherwise, we should write to the Paragraph already there.
 	p = content_area.add_paragraph() if content_area.text else content_area.paragraphs[0]
 
 	# Apply text styling.
 	p.level = level
-	p.font.size = Pt(size)
 	p.font.bold = bold
 	p.font.italic = italic
 
 	# Write the text into the space.
 	p.text = text
+
+
+# This method creates the Rules Slide.
+def rules_slide(prs, rounds, tracks):
+
+	# Create the Rules Slide.
+	slide = add_slide(prs, prs.slide_layouts[1], "Rules and Scoring")
+
+	# Add text to the Rules Slide.
+	add_text(slide, f"There will be {rounds} Rounds of {tracks} Tracks")
+	add_text(slide, "You will get roughly 30 – 45 seconds of music to guess from.")
+	add_text(slide, "Scoring is as follows:")
+	add_text(slide, "1 point for Game Franchise", level=1)
+	add_text(slide, "1 point for Specific Game", level=1)
+	add_text(slide, "1 point for Track Name/Place", level=1)
+	add_text(slide, "A couple songs don’t have official releases, or play in multiple places. Those have a star listed on the answer key, and if you put something close to it you’ll still receive the point.")
+
+
+# This method is for making the slides that show the round number before a round.
+def round_slide(prs, round_num):
+
+	# Create the slide that announces the start of a new Round.
+	slide = add_slide(prs, prs.slide_layouts[2], f"Round {round_num}")
+
+
+# This method is for making the individual track slides for each round.
+def track_slide(prs, round_num, track_num):
+
+	# Create and title the slide.
+	slide = add_slide(prs, prs.slide_layouts[3], f"Track {track_num}")
+
+	# Add the Audio object.
+	slide.shapes.add_movie(
+		FileIO(ROOT / f"tracks/{round_num}-{track_num}.mp3", "rb"),
+		left=Inches(8), top=Inches(1.5), width=Inches(6), height=Inches(6),
+		poster_frame_image=FileIO(ROOT / "speaker.png", "rb"),
+		mime_type='audio/mp3',
+	)
+
+
+
+
+def clone_shape(shape):
+	"""Add a duplicate of `shape` to the slide on which it appears."""
+	shape_obj = shape.element
+	sp_tree = shape_obj.getparent()
+	new_sp = copy.deepcopy(shape_obj)
+	sp_tree.append(new_sp)
+	new_shape = Shape(new_sp, None)
+	new_shape.left = shape.left
+	new_shape.top = shape.top
+	new_shape.width = shape.width
+	new_shape.height = shape.height
+	return new_shape
+
+
+
+
+
+
+# This method is for making the Review slide at the end of each round.
+def review_slide(prs, round_num, num_tracks):
+
+	slide = add_slide(prs, prs.slide_layouts[4], f"Round {round_num} Review")
+
+
+	audio_base_x = 5.4
+	audio_base_y = 1.11
+
+	paragraph_base_x = 7.56
+	paragraph_base_y = 4
+
+	template_text_box = slide.shapes.placeholders[1]
+
+
+
+
+	
+	# # Set the parameters of the text box already there.
+	# first_item = slide.shapes.placeholders[1]
+	# first_item.left = Inches(paragraph_base_x)
+	# first_item.top = Inches(paragraph_base_y)
+
+	# fi_tb = first_item.text_frame.paragraphs[0]
+	# fi_tb.text = " Track 1"
+
+	# Set parameters for every other item.
+	for i in range(0, num_tracks):
+		copied_text_box = clone_shape(template_text_box)
+		copied_text_box.left = Inches(
+			paragraph_base_x 
+			if i % 2 == 0 else 
+			paragraph_base_x + 4.49
+		)
+		copied_text_box.top = Inches(
+			(ceil(num_tracks / 2)) - i
+			(1 * (i / 2)) + paragraph_base_y
+			# if num_tracks % 2 == 0 else
+			if True else
+			0
+		)
+
+		copied_text_box.text_frame.paragraphs[0].text = f" Track {i + 1}"
+
+
+	# Finally, delete the extra template text box that was copied from.
+	sp = template_text_box._sp
+	sp.getparent().remove(sp)
+
+
+	# for i in range(1, num_tracks):
+
+	# 	slide.shapes.add_movie(
+	# 		FileIO(ROOT / f"tracks/{round_num}-{i + 1}.mp3", "rb"),
+	# 		left=Inches(audio_base_x), top=Inches((1.1 * i) + audio_base_y), width=Inches(0.9), height=Inches(0.9),
+	# 		poster_frame_image=FileIO(ROOT / "speaker.png", "rb"),
+	# 		mime_type='audio/mp3'
+	# 	)
+
+	# 	tb = slide.shapes.add_textbox(
+	# 		left=Inches(paragraph_base_x), top=Inches((1.09 * i) + paragraph_base_y), 
+	# 		width=Inches(2.68), height=Inches(0.71))
+		
+	# 	tb_text = tb.text_frame.paragraphs[0]
+	# 	tb_text.font.size = Pt(36)
+	# 	tb_text.text = f"- Track {i + 1}"
 
 
 # This method is for saving the PowerPoint produced by this script.
@@ -143,10 +254,11 @@ def save_presentation(presentation):
 
 
 if __name__ == '__main__':
-	print('\n\033[92mRunning vgmc_pp_maker.py\n\033[0m')
+	print('\n\033[92mRunning vgmc_pp_maker.py\033[0m')
 
-	try:
-		main()
+	main()
+	# try:
+	# 	main()
 
-	except Exception as e:
-		print(f'\033[91m{e}\033[0m')
+	# except Exception as e:
+	# 	print(f'\033[91m{e}\033[0m')

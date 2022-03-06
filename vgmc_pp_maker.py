@@ -185,7 +185,7 @@ def review_slide(prs, round_num, num_tracks):
 	paragraph_base_x = 7.56
 	paragraph_base_y = 4
 
-	template_text_box = slide.shapes.placeholders[1]
+	template_text_box = slide.shapes.placeholders[10]
 
 
 
@@ -207,12 +207,13 @@ def review_slide(prs, round_num, num_tracks):
 			if i % 2 == 0 else 
 			paragraph_base_x + 4.49
 		)
+
 		copied_text_box.top = Inches(
-			(ceil(num_tracks / 2)) - i
-			(1 * (i / 2)) + paragraph_base_y
-			# if num_tracks % 2 == 0 else
-			if True else
-			0
+			4 - (
+				ceil(num_tracks / 4) - (i // 2) - (
+					1 if ceil(num_tracks / 2) % 2 != 0 else 0.5
+				)
+			)
 		)
 
 		copied_text_box.text_frame.paragraphs[0].text = f" Track {i + 1}"

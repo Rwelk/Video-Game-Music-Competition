@@ -1,24 +1,21 @@
 # vgmc_pp_maker.py
-
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.enum.text import MSO_VERTICAL_ANCHOR
-from math import ceil, floor
-
-
-import copy
-from pptx.shapes.autoshape import Shape
-
-import argparse
+from argparse import ArgumentParser
+from copy import deepcopy
+from datetime import date
 from io import FileIO
-import sys
+from math import ceil, floor
 from pathlib import Path
+from sys import exit
 ROOT = Path(__file__).parent.absolute()
 
-from datetime import date
+from pptx import Presentation
+from pptx.shapes.autoshape import Shape
+from pptx.util import Inches
+from openpyxl import load_workbook
+
 
 # Parse the arguments provided to argparse.
-parser = argparse.ArgumentParser(description="Use this file to create a PowerPoint for the Florida Southern College Computer Science Club's Video Game Music Competiton (FSCCSCVGMC).")
+parser = ArgumentParser(description="Use this file to create a PowerPoint for the Florida Southern College Computer Science Club's Video Game Music Competiton (FSCCSCVGMC).")
 parser.add_argument('-d', '--default', action="store_true", help='creates a default PowerPoint with 5 Rounds each with 10 Tracks.')
 parser.add_argument('-r', '--rounds', type=int, nargs='?', help='provide a number of rounds')
 parser.add_argument('-t', '--tracks', type=int, nargs='?', help='provide a number of tracks for each round')
@@ -28,14 +25,19 @@ def main():
 	
 	# Determine how many Rounds and Tracks per Round there will be.
 	num_rounds, num_tracks = determine_parameters()
-	print(f"\033[96mThere will be \033[93m{num_rounds}\033[96m Rounds Each with \033[93m{num_tracks}\033[96m Tracks.\033[0m")
+	print(f"\033[96mThere will be \033[93m{num_rounds}\033[96m Round{'s Each' if num_rounds > 1 else ''} with \033[93m{num_tracks}\033[96m Tracks.\033[0m")
 
 	# Create the PowerPoint using the slide template.
 	prs = Presentation(ROOT / "templates" / "master_copy.pptx")
 
+	# Read in the answer key for later
+	wb = load_workbook(ROOT / 'tracks' / 'song_info.xlsx')
+	answer_sheet = wb.active
+
 	# Create the Title and Rules Slides
 	rules_slide(prs, num_rounds, num_tracks)
 
+	# Create the slides for each round.
 	for round_num in range(1, num_rounds + 1):
 
 		round_slide(prs, round_num)
@@ -44,6 +46,8 @@ def main():
 			track_slide(prs, round_num, track_num)
 
 		review_slide(prs, round_num, num_tracks)
+
+		answer_slide(prs, answer_sheet, round_num, num_tracks)
 
 
 
@@ -61,7 +65,7 @@ def determine_parameters():
 	#     be used with -d.
 	if args.default and (args.rounds or args.tracks):
 		print("--default and --rounds|--tracks are mutually exclusive and cannot be used together.")
-		sys.exit(2)
+		exit(2)
 	else:
 
 		# If -d was provided, set rounds and tracks to the default values of 5
@@ -91,7 +95,7 @@ def add_slide(prs, layout, title):
 
 
 # This method is for adding additional lines of text to a slide
-def add_text(slide, text, level=0, bold=False, italic=False):
+def add_text(slide, text, level=0, bold=False, italic=False, append=False):
 
 	# Each slide has some number of items on them called shapes, which
 	# 	themselves store some number of placeholders.
@@ -111,15 +115,20 @@ def add_text(slide, text, level=0, bold=False, italic=False):
 	# If it does, we have to call .add_paragraph(), a method belonging to
 	# 	text_frame that creates a new Paragraph that can be written to.
 	# Otherwise, we should write to the Paragraph already there.
-	p = content_area.add_paragraph() if content_area.text else content_area.paragraphs[0]
+	if not append and content_area.text:
+		p = content_area.add_paragraph()
+	else:
+		p = content_area.paragraphs[len(content_area.paragraphs) - 1]
+
+	
+	# Write the text into the space.
+	run = p.add_run()
+	run.text = text
 
 	# Apply text styling.
 	p.level = level
-	p.font.bold = bold
-	p.font.italic = italic
-
-	# Write the text into the space.
-	p.text = text
+	run.font.bold = bold
+	run.font.italic = italic
 
 
 # This method is for duplicating a shape and adding it to the slide on which it
@@ -127,7 +136,7 @@ def add_text(slide, text, level=0, bold=False, italic=False):
 def clone_shape(shape):
 	shape_obj = shape.element
 	sp_tree = shape_obj.getparent()
-	new_sp = copy.deepcopy(shape_obj)
+	new_sp = deepcopy(shape_obj)
 	sp_tree.append(new_sp)
 	new_shape = Shape(new_sp, None)
 	new_shape.left = shape.left
@@ -144,13 +153,13 @@ def rules_slide(prs, rounds, tracks):
 	slide = add_slide(prs, prs.slide_layouts[1], "Rules and Scoring")
 
 	# Add text to the Rules Slide.
-	add_text(slide, f"There will be {rounds} Rounds of {tracks} Tracks")
+	add_text(slide, f"There will be {rounds} Rounds each with {tracks} Tracks.")
 	add_text(slide, "You will get roughly 30 – 45 seconds of music to guess from.")
 	add_text(slide, "Scoring is as follows:")
 	add_text(slide, "1 point for Game Franchise", level=1)
 	add_text(slide, "1 point for Specific Game", level=1)
 	add_text(slide, "1 point for Track Name/Place", level=1)
-	add_text(slide, "A couple songs don’t have official releases, or play in multiple places. Those have a star listed on the answer key, and if you put something close to it you’ll still receive the point.")
+	add_text(slide, "Some songs don’t have official releases, or play in multiple games/areas. Those songs will have a star listed on the answer key, so if you put something close to the listing you’ll still receive the point.")
 
 
 # This method creates the slides that show the round number before each round.
@@ -187,19 +196,19 @@ def review_slide(prs, round_num, num_tracks):
 
 
 	# Generate the song-text pairs.
-	for i in range(1, num_tracks + 1):
+	for index in range(1, num_tracks + 1):
 
 		# Add the track.
 		track = slide.shapes.add_movie(
 
 			# Location of the track.
-			FileIO(ROOT / "tracks" / f"{round_num}-{i}.mp3", "rb"),
+			FileIO(ROOT / "tracks" / f"{round_num}-{index}.mp3", "rb"),
 
 			# X-coordinate of the track
-			left=Inches(determine_x_coord(i, "track")),
+			left=Inches(determine_x_coord(index, "track")),
 			
 			# Y-coordinate of the track
-			top=Inches(determine_y_coord(num_tracks, i)),
+			top=Inches(determine_y_coord(num_tracks, index)),
 			
 			# Dimensions of the track
 			width=Inches(1), height=Inches(1),
@@ -215,18 +224,18 @@ def review_slide(prs, round_num, num_tracks):
 		cloned_tb = clone_shape(template_text_box)
 
 		# Set the X-coordinate.
-		cloned_tb.left = Inches(determine_x_coord(i, "text"))
+		cloned_tb.left = Inches(determine_x_coord(index, "text"))
 
 		# Set the Y-coordinate.
-		cloned_tb.top = Inches(determine_y_coord(num_tracks, i))
+		cloned_tb.top = Inches(determine_y_coord(num_tracks, index))
 
 		# Add the text.
-		cloned_tb.text = f" Track {i}"
+		cloned_tb.text = f" Track {index}"
 
 		# If num_tracks is odd, the final Track and Text Box are sitting alone
 		# 	in the left column with no corresponding item in the right column,
 		# 	so horizontally center it.
-		if (i == num_tracks) and (num_tracks % 2 != 0):
+		if (index == num_tracks) and (num_tracks % 2 != 0):
 			track.left = Inches(8.75)
 			cloned_tb.left = Inches(9.75)
 		
@@ -236,7 +245,7 @@ def review_slide(prs, round_num, num_tracks):
 	sp.getparent().remove(sp)
 
 
-# Equation for determining where the Review slide's Track and Text Box
+# Equation for review_slide() that determines where the Track and Text Box
 # 	X-coordinates are.
 def determine_x_coord(i, type):
 
@@ -251,7 +260,7 @@ def determine_x_coord(i, type):
 	return start + offset
 
 
-# Equation for determining where the Review slide's Track and Text Box
+# Equation for review_slide() that determines where the Track and Text Box
 # 	Y-coordinates are.
 def determine_y_coord(n, i):
 
@@ -286,6 +295,23 @@ def determine_y_coord(n, i):
 		)
 	, 3))
 
+
+def answer_slide(prs, answers_ws, round_num, num_tracks):
+
+	# Create and title the slide.
+	slide = add_slide(prs, prs.slide_layouts[5], f"Round {round_num} Answers")
+
+	for i in range(1, num_tracks + 1):
+		fran = answers_ws[f'A{((round_num - 1) * num_tracks) + i + 1}'].value
+		game = answers_ws[f'B{((round_num - 1) * num_tracks) + i + 1}'].value
+		song = answers_ws[f'C{((round_num - 1) * num_tracks) + i + 1}'].value
+
+		add_text(slide, f"{fran}: ")
+		add_text(slide, f"{game}", italic=True, append=True)
+		add_text(slide, f" – {song}", append=True)
+
+
+	# Super Mario Brothers: Super Mario Galaxy – Good Egg Galaxy
 
 
 

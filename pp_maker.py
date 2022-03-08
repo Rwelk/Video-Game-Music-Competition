@@ -23,7 +23,7 @@ def main():
 	
 	# Determine how many Rounds and Tracks per Round there will be.
 	num_rounds, num_tracks, challenge = determine_parameters(ARGS)
-	print(f"\033[96mThere will be \033[93m{num_rounds}\033[96m Round{'s Each' if num_rounds > 1 else ''} with \033[93m{num_tracks}\033[96m Tracks.\nRound {num_rounds} will {'also' if challenge else 'not'} be a Challenge Round.\033[0m")
+	print(f"\033[96mThere will be \033[93m{num_rounds}\033[96m Round{'s Each' if num_rounds > 1 else ''} with \033[93m{num_tracks}\033[96m Tracks.\nRound {num_rounds} will {'also' if challenge else 'not'} be a Challenge Round.\n\033[0m")
 
 	# Create the PowerPoint using the slide template.
 	prs = Presentation(ROOT / "templates" / "master_copy.pptx")
@@ -37,6 +37,9 @@ def main():
 
 	# Create the slides for each round.
 	for round_num in range(1, num_rounds + 1):
+
+		print(f"\033[96mGenerating Round {round_num}...\033[0m")
+
 
 		challenge_round = (challenge and round_num == num_rounds)
 

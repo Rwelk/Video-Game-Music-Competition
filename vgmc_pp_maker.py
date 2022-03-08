@@ -10,22 +10,25 @@ ROOT = Path(__file__).parent.absolute()
 
 from pptx import Presentation
 from pptx.shapes.autoshape import Shape
-from pptx.util import Inches
+from pptx.util import Inches, Pt
+from pptx.enum.text import MSO_TEXT_UNDERLINE_TYPE
 from openpyxl import load_workbook
 
 
 # Parse the arguments provided to argparse.
-parser = ArgumentParser(description="Use this file to create a PowerPoint for the Florida Southern College Computer Science Club's Video Game Music Competiton (FSCCSCVGMC).")
-parser.add_argument('-d', '--default', action="store_true", help='creates a default PowerPoint with 5 Rounds each with 10 Tracks.')
-parser.add_argument('-r', '--rounds', type=int, nargs='?', help='provide a number of rounds')
-parser.add_argument('-t', '--tracks', type=int, nargs='?', help='provide a number of tracks for each round')
-args = parser.parse_args()
+PARSER = ArgumentParser(description="Use this file to create a PowerPoint for the Florida Southern College Computer Science Club's Video Game Music Competiton (FSCCSCVGMC).")
+PARSER.add_argument('-d', '--default', action="store_true", help='creates a default PowerPoint with 5 Rounds each with 10 Tracks.')
+PARSER.add_argument('-r', '--rounds', type=int, nargs='?', help='provide a number of rounds')
+PARSER.add_argument('-t', '--tracks', type=int, nargs='?', help='provide a number of tracks for each round')
+PARSER.add_argument('-nc', '--nochallenge', action='store_true', help="use this flag if you don't want to have the final round be a challege round")
+ARGS = PARSER.parse_args()
 
 def main():
 	
 	# Determine how many Rounds and Tracks per Round there will be.
-	num_rounds, num_tracks = determine_parameters()
+	num_rounds, num_tracks, challenge = determine_parameters()
 	print(f"\033[96mThere will be \033[93m{num_rounds}\033[96m Round{'s Each' if num_rounds > 1 else ''} with \033[93m{num_tracks}\033[96m Tracks.\033[0m")
+	print(f"\033[96mRound {num_rounds} will {'also' if challenge else 'not'} be a Challenge Round.\033[0m")
 
 	# Create the PowerPoint using the slide template.
 	prs = Presentation(ROOT / "templates" / "master_copy.pptx")
@@ -40,15 +43,19 @@ def main():
 	# Create the slides for each round.
 	for round_num in range(1, num_rounds + 1):
 
-		round_slide(prs, round_num)
+		challenge_round = (challenge and round_num == num_rounds)
+
+		round_slide(prs, round_num, challenge_round)
+
+		if challenge_round:
+			rules_slide(prs, num_rounds, num_tracks, True)
 
 		for track_num in range(1, num_tracks + 1):
 			track_slide(prs, round_num, track_num)
 
 		review_slide(prs, round_num, num_tracks)
 
-		answer_slide(prs, answer_sheet, round_num, num_tracks)
-
+		answer_slide(prs, answer_sheet, round_num, num_tracks, challenge_round)
 
 
 	# Save the Presentation
@@ -63,23 +70,29 @@ def determine_parameters():
 	#     -d is provided, it cannot be combined with -r or -t.
 	# One the other end, -r and -t can be used together or separatly, but cannot
 	#     be used with -d.
-	if args.default and (args.rounds or args.tracks):
+	if not (ARGS.default):
+		print("You have to use flags to tell the program how many Rounds and Tracks you want.")
+		print("Try using the -h flag to learn more.")
+		exit(2)	
+	elif ARGS.default and (ARGS.rounds or ARGS.tracks):
 		print("--default and --rounds|--tracks are mutually exclusive and cannot be used together.")
 		exit(2)
 	else:
 
 		# If -d was provided, set rounds and tracks to the default values of 5
 		#     and 10 respectively.
-		if args.default: rounds, tracks = 5, 10
+		if ARGS.default: rounds, tracks = 5, 10
 
 		# Otherwise, check to see if -r and/or -t was/were provided.
 		# If -r was provided, set rounds to that number, else set it to 5.
 		# If -t was provided, set tracks to that number, else set it to 10.
 		else: 
-			rounds = args.rounds if args.rounds is not None else 5
-			tracks = args.tracks if args.tracks is not None else 10
+			rounds = ARGS.rounds if ARGS.rounds is not None else 5
+			tracks = ARGS.tracks if ARGS.tracks is not None else 10
 
-	return rounds, tracks
+	challenge_round = True if not ARGS.nochallenge else False
+
+	return rounds, tracks, challenge_round
 
 
 # This method is for generating a new slide.
@@ -89,13 +102,13 @@ def add_slide(prs, layout, title):
 	slide = prs.slides.add_slide(layout)
 	
 	# Title the slide.
-	slide.shapes.title.text_frame.paragraphs[0].text = title
+	slide.shapes.title.text = title
 
 	return slide
 
 
 # This method is for adding additional lines of text to a slide
-def add_text(slide, text, level=0, bold=False, italic=False, append=False):
+def add_text(slide, text, level=0, bold=False, italic=False, underline=False, append=False):
 
 	# Each slide has some number of items on them called shapes, which
 	# 	themselves store some number of placeholders.
@@ -129,6 +142,7 @@ def add_text(slide, text, level=0, bold=False, italic=False, append=False):
 	p.level = level
 	run.font.bold = bold
 	run.font.italic = italic
+	if underline: run.font.underline = MSO_TEXT_UNDERLINE_TYPE.SINGLE_LINE
 
 
 # This method is for duplicating a shape and adding it to the slide on which it
@@ -147,26 +161,49 @@ def clone_shape(shape):
 
 
 # This method creates the Rules slide.
-def rules_slide(prs, rounds, tracks):
+def rules_slide(prs, rounds, tracks, challenge=False):
 
 	# Create and title the slide.
 	slide = add_slide(prs, prs.slide_layouts[1], "Rules and Scoring")
 
-	# Add text to the Rules Slide.
-	add_text(slide, f"There will be {rounds} Rounds each with {tracks} Tracks.")
-	add_text(slide, "You will get roughly 30 – 45 seconds of music to guess from.")
-	add_text(slide, "Scoring is as follows:")
-	add_text(slide, "1 point for Game Franchise", level=1)
-	add_text(slide, "1 point for Specific Game", level=1)
-	add_text(slide, "1 point for Track Name/Place", level=1)
-	add_text(slide, "Some songs don’t have official releases, or play in multiple games/areas. Those songs will have a star listed on the answer key, so if you put something close to the listing you’ll still receive the point.")
+	# Add this text to the slide if it isn't for the special Challenge Round.
+	if not challenge:
+		add_text(slide, f"There will be {rounds} Rounds each with {tracks} Tracks.")
+		add_text(slide, "You will get roughly 30 – 45 seconds of music to guess from.")
+		add_text(slide, "Scoring is as follows:")
+		add_text(slide, "1 point for Game Franchise", level=1)
+		add_text(slide, "1 point for Specific Game", level=1)
+		add_text(slide, "1 point for Track Name/Place", level=1)
+		add_text(slide, "Some songs don’t have official releases, or play in multiple games/areas. Those songs will have a star listed on the answer key, so if you put something close to the listing you’ll still receive the point.")
 
+	# Else, change the title and add the special Challenge Round rules.
+	else:
+		slide.shapes.title.text = "Special Rules"
+		add_text(slide, "This will be the hardest round.")
+		add_text(slide, "This time you only need the game’s name, with a correct guess earning ")
+		add_text(slide, "5 points", bold=True, underline=True, append=True)
+		add_text(slide, ".", append=True)
+		add_text(slide, "Because of this, we are going to be much stricter about getting the name right.")
+		add_text(slide, "All songs chosen here are ones on my personal playlists, but might not be the most popular from its associated game.")
+		add_text(slide, "Good luck!")
 
 # This method creates the slides that show the round number before each round.
-def round_slide(prs, round_num):
+def round_slide(prs, round_num, challenge=False):
 
 	# Create and title the slide.
-	slide = add_slide(prs, prs.slide_layouts[2], f"Round {round_num}")
+	# Because slide_layouts[2] doesn't have a title placeholder, the slide
+	# 	creation and titling has to be explicitly done rather than with the
+	# 	usual add_slide().
+	slide = prs.slides.add_slide(prs.slide_layouts[2])
+	tf = slide.shapes.placeholders[10].text_frame
+	tf.paragraphs[0].text = f"Round {round_num}"
+	
+	# If the round is supposed to be a challenge round, this extra bit of
+	# 	formatted text also needs be added to the slide's "title" field.
+	if challenge:
+		p = tf.add_paragraph()
+		p.text = "(Challenge Round)"
+		p.font.size = Pt(66)
 
 
 # This method creates the individual Track slides for each round.
@@ -296,23 +333,33 @@ def determine_y_coord(n, i):
 	, 3))
 
 
-def answer_slide(prs, answers_ws, round_num, num_tracks):
+# This method creates the Answer slide for showing the round answers.
+def answer_slide(prs, answers_ws, round_num, num_tracks, challenge=False):
 
 	# Create and title the slide.
 	slide = add_slide(prs, prs.slide_layouts[5], f"Round {round_num} Answers")
 
+	# Because the answers are stored sequentially, and have a variable number of
+	# 	tracks, an offset needs to be generated.
+	# An additional +1 is also added to account for the first row being headers
+	# 	in the Excel Worksheet.
+	offset = ((round_num - 1) * num_tracks) + 1
+
+	# Add the answers to the slide.
 	for i in range(1, num_tracks + 1):
-		fran = answers_ws[f'A{((round_num - 1) * num_tracks) + i + 1}'].value
-		game = answers_ws[f'B{((round_num - 1) * num_tracks) + i + 1}'].value
-		song = answers_ws[f'C{((round_num - 1) * num_tracks) + i + 1}'].value
 
-		add_text(slide, f"{fran}: ")
-		add_text(slide, f"{game}", italic=True, append=True)
-		add_text(slide, f" – {song}", append=True)
+		# If it's not a challenge round, add the Game Franchise.
+		if not challenge:
+			add_text(slide, f"{answers_ws[f'A{offset + i}'].value}: ")
 
-
-	# Super Mario Brothers: Super Mario Galaxy – Good Egg Galaxy
-
+		# Next add the Game.
+		# The append status is dependent on if challenge is still False.
+		# If so, it should just append to the Franchise paragraph.
+		# If not, there is no Franchise paragraph so it should NOT append.
+		add_text(slide, f"{answers_ws[f'B{offset + i}'].value}", italic=True, append=(not challenge))
+		
+		# Finally add the Song.
+		add_text(slide, f" – {answers_ws[f'C{offset + i}'].value}", append=True)
 
 
 # This method is for saving the PowerPoint produced by this script.
@@ -330,9 +377,8 @@ def save_presentation(presentation):
 if __name__ == '__main__':
 	print('\n\033[92mRunning vgmc_pp_maker.py\033[0m')
 
-	main()
-	# try:
-	# 	main()
+	try:
+		main()
 
-	# except Exception as e:
-	# 	print(f'\033[91m{e}\033[0m')
+	except Exception as e:
+		print(f'\033[91m{e}\033[0m')
